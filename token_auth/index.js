@@ -5,6 +5,8 @@ const bodyParser = require('body-parser');
 const path = require('path');
 const port = 3000;
 const fs = require('fs');
+const axios = require('axios');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 app.use(bodyParser.json());
@@ -112,24 +114,39 @@ const users = [
     }
 ]
 
-app.post('/api/login', (req, res) => {
+
+app.post('/api/login', async (req, res) => {
     const { login, password } = req.body;
 
-    const user = users.find((user) => {
-        if (user.login == login && user.password == password) {
-            return true;
-        }
-        return false
-    });
+    try {
+        // Make a request to Auth0 to authenticate the user
+        const authResponse = await axios.post('https://dev-oq87tp0qk6gh1qp8.us.auth0.com/oauth/token', {
+            grant_type: 'password',
+            username: login,
+            password: password,
+            client_id: 'BG640TUfkyjyMdYg1a8ljHuhbVpuVqIe',
+            client_secret: 'klgAc7CW9Jv1SNqHl55VCrv1kX1joxlzKH50pxfpUbSUS9EE0WTRKqXkjeQd52rw',
+            audience: ' https://localhost:3000',
+            scope: 'openid profile email',
+        });
 
-    if (user) {
-        req.session.username = user.username;
-        req.session.login = user.login;
+        const accessToken = authResponse.data.access_token;
 
-        res.json({ token: req.sessionId });
+        // You may want to decode the access token to get user information
+        const userInformation = jwt.decode(accessToken);
+
+        // Store user information in the session
+        req.session.username = userInformation.username;
+        req.session.login = userInformation.login;
+
+        // Send a response with the access token
+        res.json({ token: accessToken });
+    } catch (error) {
+        console.error(error);
+
+        // Handle authentication failure
+        res.status(401).json({ error: 'Authentication failed', message: 'Wrong email or password.' });
     }
-
-    res.status(401).send();
 });
 
 app.listen(port, () => {
